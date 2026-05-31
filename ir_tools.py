@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import shutil
 
 from signals.stimuli import create_chirp
+from signals.ir import plot_spectrum, apply_ir
 
 
 def test(length: int, fs: int, f_start, f_end, f: Path, out_dir: Path):
@@ -13,8 +14,12 @@ def test(length: int, fs: int, f_start, f_end, f: Path, out_dir: Path):
     if wav[0] != fs:
         raise ValueError('File has incorrect sampling frequency. File and specified fs must match!')
 
+    ir = wav[1]
+    plot_spectrum(ir, fs, out_dir / 'ir_spectrum.png')
+
     t, sig = create_chirp(length, fs, f_start, f_end, out_dir / 'chirp.wav')
 
+    plt.figure()
     plt.plot(t, sig)
     plt.show()
 
