@@ -2,13 +2,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Union
 from pathlib import Path
+from scene_rir import rir
 
 
 def apply_ir(ir: np.ndarray, signal: np.ndarray):
-    return np.convolve(signal, ir, mode='valid')
+    return np.convolve(signal, ir, mode='full')
 
 
-def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None):
+def calc_ir(stimuli_path: Path, recorded_path: Path):
+    params = {
+        'rec_path': str(recorded_path),
+        'ref_path': str(stimuli_path)
+    }
+    irs = rir.ImpulseResponseSignal(params, sgllvl=0)
+    return irs
+
+
+def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title: str=None):
     spect = abs(np.fft.fft(signal))
     idx = spect.shape[0]//2
 
@@ -30,7 +40,9 @@ def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None):
     plt.xscale('log')
     plt.xlabel('Frequency [Hz]')
     plt.ylabel('Amplitude [dB]')
-    plt.title('Impulse Response Spectrum')
+    plt.title('Spectrum' if title is None else title)
     if outfile is not None:
         plt.savefig(outfile, dpi=300)
     plt.show()
+
+    return f[i_20:i_20k], amp[i_20:i_20k]

@@ -4,8 +4,8 @@ from scipy.io import wavfile
 import matplotlib.pyplot as plt
 import shutil
 
-from signals.stimuli import create_chirp
-from signals.ir import plot_spectrum, apply_ir
+from signals.stimuli import create_chirp, write_wav
+from signals.ir import plot_spectrum, apply_ir, calc_ir
 
 
 def test(length: int, fs: int, f_start, f_end, f: Path, out_dir: Path):
@@ -15,13 +15,47 @@ def test(length: int, fs: int, f_start, f_end, f: Path, out_dir: Path):
         raise ValueError('File has incorrect sampling frequency. File and specified fs must match!')
 
     ir = wav[1]
-    plot_spectrum(ir, fs, out_dir / 'ir_spectrum.png')
 
-    t, sig = create_chirp(length, fs, f_start, f_end, out_dir / 'chirp.wav')
+    f, spec_orig = plot_spectrum(ir, fs, out_dir / 'ir_spectrum.png', title='Impulse Response Spectrum Original')
+
+    sig = create_chirp(length, fs, f_start, f_end, out_dir / 'chirp.wav')
 
     plt.figure()
-    plt.plot(t, sig)
+    plt.plot(sig.time_vector(), sig.signal_vector()[1])
+    plt.xlabel('Time [s]')
+    plt.ylabel('Amplitude')
+    plt.title('Chirp')
+    plt.savefig(out_dir / 'chirp.png', dpi=300)
     plt.show()
+
+    out_sig = apply_ir(ir, sig.signal_vector()[1])
+    write_wav(out_dir / 'response.wav', out_sig, fs)
+
+    check_ir = calc_ir(out_dir / 'chirp.wav', out_dir / 'response.wav')
+    f_calc, spec_calc = plot_spectrum(check_ir.signal_vector()[1][0:ir.shape[0]], fs, out_dir / 'ir_spectrum_calc.png',
+                                      title='Impulse Response Spectrum Calculated')
+
+    spec_diff = spec_calc - spec_orig
+    plt.figure()
+    plt.plot(f, spec_orig, label='Original')
+    plt.plot(f, spec_calc, label='Calculated')
+    plt.xscale('log')
+    plt.legend()
+    plt.ylabel('Amplitude [dB]')
+    plt.xlabel('Frequency [Hz]')
+    plt.tight_layout()
+    plt.savefig(out_dir / 'spectrum_comparison.png', dpi=300)
+    plt.show()
+
+    plt.figure()
+    plt.plot(f, spec_diff)
+    plt.xscale('log')
+    plt.ylabel('Amplitude Difference [dB]')
+    plt.xlabel('Frequency [Hz]')
+    plt.tight_layout()
+    plt.savefig(out_dir / 'spectrum_difference.png', dpi=300)
+    plt.show()
+
 
 
 if __name__ == '__main__':
