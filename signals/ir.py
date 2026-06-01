@@ -18,7 +18,7 @@ def calc_ir(stimuli_path: Path, recorded_path: Path):
     return irs
 
 
-def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title: str=None):
+def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title: str=None, show_plots: bool=False):
     spect = abs(np.fft.fft(signal))
     idx = spect.shape[0]//2
 
@@ -43,6 +43,7 @@ def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title
     plt.title('Spectrum' if title is None else title)
     if outfile is not None:
         plt.savefig(outfile, dpi=300)
-    plt.show()
+    if show_plots:
+        plt.show()
 
     return f[i_20:i_20k], amp[i_20:i_20k]
