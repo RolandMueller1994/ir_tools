@@ -134,3 +134,16 @@ The tool would be executed with following parameter if the setup above is to be 
 ```shell
 python ir_tools.py --fs 48000 --f_start 1 --f_stop 20000 --output_dir <path/to/results> record 3 1 0 0 "[1, 2]"
 ```
+
+Following parameters are used:
+
+|            Parameter            |  Value   |
+|:-------------------------------:|:--------:|
+|       Sampling frequency        | 48000 Hz |
+|         Start frequency         |   1 Hz   |
+|         Stop frequency          |  20 kHz  |
+|            Device ID            |    3     |
+|         Output channel          |    1     |
+| Timing reference output channel |    0     |
+| Timing reference input channel  |    0     |
+|       Recording channels        | 1 and 2  |
