@@ -41,6 +41,10 @@ This shows that the calculations performed by the tool and the underlying librar
 
 The "record" mode is used to create impulse response measurements. The figure below shows a typical setup using 4-in/4-out soundcard.
 
+> [!CAUTION]
+> The amplifier used in this setup should provide a linear frequency response. Thus, preferably a solid state PA/HIFI amp is used.
+> If for example a guitar tube-amplifier power section is used, the frequency response of the power section will be part of the IR.
+
 ![](doc/recording_setup.png)
 
 In this scenario, output 1 and input 1 are used for timing reference. 
