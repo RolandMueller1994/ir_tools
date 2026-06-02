@@ -108,7 +108,8 @@ options:
 ### Record Mode
 
 ```shell
-usage: ir_tools.py record [-h] [--trim_ir] [--shape_ir] [--fade_out FADE_OUT] [--start_offset START_OFFSET] [--ir_length IR_LENGTH] device_id output_channel reference_output_channel reference_input_channel record_channels
+usage: ir_tools.py record [-h] [--level LEVEL] [--trim_ir] [--shape_ir] [--fade_out FADE_OUT] [--start_offset START_OFFSET] [--ir_length IR_LENGTH]
+                          device_id output_channel reference_output_channel reference_input_channel record_channels
 
 positional arguments:
   device_id             The device id of the recording device
@@ -121,6 +122,7 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
+  --level LEVEL         The output level during recording in dB
   --trim_ir             Trim the IR signal to length
   --shape_ir            Shape the IR signal by fade-in and fade-out
   --fade_out FADE_OUT   Relative length of fade-out
@@ -128,6 +130,7 @@ options:
                         The number of samples before the start of the IR
   --ir_length IR_LENGTH
                         The length of the IR in samples
+  --postfix POSTFIX     Postfix to be added to end of the file name
 ```
 
 ## Example Usage

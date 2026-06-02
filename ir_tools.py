@@ -1,7 +1,7 @@
 import json
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 import scipy
 from scipy.io import wavfile
@@ -28,10 +28,14 @@ def _check_freq(fs: int, f_start, f_stop):
 
 
 def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: List[int], fs: int, f_start: int,
-           f_end: int, output_dir: Path, trim_ir: bool = False, shape_ir: bool = False,
-           start_offset: int = 32, ir_length: int = 2 ** 13, fade_out: float = 0.1, show_plots: bool=False):
+           f_end: int, level: float, output_dir: Path, trim_ir: bool = False, shape_ir: bool = False,
+           start_offset: int = 32, ir_length: int = 2 ** 13, fade_out: float = 0.1, show_plots: bool=False,
+           postfix: Union[str, None] = None):
 
     _check_freq(fs, f_start, f_end)
+
+    if level > 0:
+        raise ValueError('Level should be less than or equal to 0 dB. 0 db would be full-scale output.')
 
     devices = sd.query_devices()
     if device_id >= len(devices):
@@ -63,7 +67,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
         if fade_out < 0 or fade_out > 1:
             raise ValueError('Fade out value must be between 0 and 1!')
 
-    sig = create_chirp(fs, f_start, f_end, outfile=output_dir / 'stimuli.wav')
+    sig = create_chirp(fs, f_start, f_end, outfile=output_dir / 'stimuli.wav', level=level)
 
     stim = create_output_data(sig, channels, out_ch, ref_out_ch)
     print(f'Recording exponential sine-sweep of {stim.shape[0] * 1/fs:.2f}s length.')
@@ -87,6 +91,11 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
     output_file = output_dir / f'reference.wav'
     wavfile.write(output_file, fs, ref_in_data)
 
+    if postfix is None:
+        postfix = ''
+    elif not postfix.startswith('_'):
+        postfix = '_' + postfix
+
     for ch in rec_ch:
         print(f'Analyzing data for channel {ch}')
         plt.figure()
@@ -99,7 +108,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
             plt.ylabel('Amplitude')
             plt.show()
 
-        output_file = output_dir / f'channel_{ch}.wav'
+        output_file = output_dir / f'channel_{ch}{postfix}.wav'
         wavfile.write(output_file, fs, rec[ch][offset:])
         ir = calc_ir(output_dir / 'stimuli.wav', output_file, f_start, f_end)
 
@@ -127,9 +136,12 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
                 plt.show()
             ir_vector *= window
 
-        wavfile.write(output_dir / f'ir_channel_{ch}.wav', fs, ir_vector)
+        ir_file = output_dir / f'ir_channel_{ch}{postfix}.wav'
+        wavfile.write(ir_file, fs, ir_vector)
+        print(f'Recording written to: {output_file}')
+        print(f'Impulse response written to: {ir_file}')
 
-        plot_spectrum(ir.signal_vector()[1], fs, outfile=output_dir / f'spectrum_{ch}.png',
+        plot_spectrum(ir.signal_vector()[1], fs, outfile=output_dir / f'spectrum_{ch}{postfix}.png',
                       title=f'Spectrum channel {ch}', show_plots=show_plots)
 
 
@@ -234,6 +246,7 @@ if __name__ == '__main__':
                                  help='The reference input channel of the recording device')
     rec_mode_parser.add_argument('record_channels', type=lambda val: check_rec_channels(val, arg_parser),
                                  help='A list of input channels that should be recorded. Format: "[3, 4]"')
+    rec_mode_parser.add_argument('--level', type=float, help='The output level during recording in dB', default=-20, required=False)
     rec_mode_parser.add_argument('--trim_ir', action='store_true', default=False, help='Trim the IR signal to length')
     rec_mode_parser.add_argument('--shape_ir', action='store_true', default=False,
                                  help='Shape the IR signal by fade-in and fade-out')
@@ -243,6 +256,8 @@ if __name__ == '__main__':
                                  default=32, required=False)
     rec_mode_parser.add_argument('--ir_length', type=int, help='The length of the IR in samples', default=8192,
                                  required=False)
+    rec_mode_parser.add_argument('--postfix', type=str, help='Postfix to be added to end of the file name',
+                                 default=None, required=False)
 
     args = arg_parser.parse_args()
 
@@ -253,7 +268,7 @@ if __name__ == '__main__':
         test(args.fs, args.f_start, args.f_stop, args.file, out_dir, args.show_plots)
     elif args.mode == 'record':
         record(args.device_id, args.output_channel, args.reference_output_channel, args.reference_input_channel,
-               args.record_channels, args.fs, args.f_start, args.f_stop, out_dir, args.trim_ir, args.shape_ir,
-               args.start_offset, args.ir_length, args.fade_out, args.show_plots)
+               args.record_channels, args.fs, args.f_start, args.f_stop, args.level, out_dir, args.trim_ir, args.shape_ir,
+               args.start_offset, args.ir_length, args.fade_out, args.show_plots, args.postfix)
     else:
         raise ValueError('Invalid mode')
