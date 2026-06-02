@@ -1,3 +1,4 @@
+import json
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import List
@@ -15,17 +16,36 @@ from signals.ir import plot_spectrum, apply_ir, calc_ir, create_window
 
 import sounddevice as sd
 
+def _check_freq(fs: int, f_start, f_stop):
+    if fs not in [44100, 48000]:
+        raise ValueError('Sampling frequency must be 44100 or 48000!')
+    if f_start < 1:
+        raise ValueError('Start frequency must be greater than 0!')
+    if f_stop >= fs // 2:
+        raise ValueError('Stop frequency must be less than fs/2!')
+    if f_start >= f_stop:
+        raise ValueError('Start frequency must be less than stop frequency!')
+
 
 def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: List[int], fs: int, f_start: int,
            f_end: int, output_dir: Path, trim_ir: bool = False, shape_ir: bool = False,
-           start_offset: int = 32, ir_length: int = 2 ** 13, fade_out: float = 0.1):
-    dev = sd.query_devices()[device_id]
+           start_offset: int = 32, ir_length: int = 2 ** 13, fade_out: float = 0.1, show_plots: bool=False):
+
+    _check_freq(fs, f_start, f_end)
+
+    devices = sd.query_devices()
+    if device_id >= len(devices):
+        raise ValueError(f'Device {device_id} does not exist!')
+    dev = devices[device_id]
+
+    print(f'Using device: {str(json.dumps(dev, indent=4))}')
+
     sd.default.device = dev['name']
 
     channels = min(32, dev['max_input_channels'], dev['max_output_channels'])
     if channels == 0:
         raise ValueError(f'Device has to have input and output channels. Device {str(dev)}')
-    print(f'Using {channels} channels')
+    print(f'Number of channels: {channels}')
 
     if ref_out_ch >= channels or out_ch >= channels or ref_in >= channels or max(rec_ch) >= channels:
         raise ValueError('Channel range exceeded!')
@@ -36,9 +56,17 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
     sd.default.samplerate = fs
     sd.default.channels = channels
 
+    if shape_ir:
+        if start_offset < 0:
+            raise ValueError('Start offset can\'t be negative!')
+
+        if fade_out < 0 or fade_out > 1:
+            raise ValueError('Fade out value must be between 0 and 1!')
+
     sig = create_chirp(fs, f_start, f_end, outfile=output_dir / 'stimuli.wav')
 
     stim = create_output_data(sig, channels, out_ch, ref_out_ch)
+    print(f'Recording exponential sine-sweep of {stim.shape[0] * 1/fs:.2f}s length.')
     rec = sd.playrec(stim, fs, channels, blocking=True).T[..., 2 ** 20:]
 
     ref_in_data = rec[ref_in]
@@ -54,20 +82,22 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
     else:
         offset = np.argmin(corr)
     offset -= ref_in_data.shape[0] // 2 + start_offset
-    print(f'Offset {offset}')
+    print(f'Removing initial offset from data: {offset} samples / {offset * 1/fs * 1000:.2f}ms')
 
     output_file = output_dir / f'reference.wav'
     wavfile.write(output_file, fs, ref_in_data)
 
     for ch in rec_ch:
+        print(f'Analyzing data for channel {ch}')
         plt.figure()
         rec_data = rec[ch][offset:]
         t = np.linspace(0, rec_data.shape[0] * 1 / fs, rec_data.shape[0])
-        plt.plot(t, rec_data)
-        plt.title(f'Channel {ch} Signal')
-        plt.xlabel('Time [s]')
-        plt.ylabel('Amplitude')
-        plt.show()
+        if show_plots:
+            plt.plot(t, rec_data)
+            plt.title(f'Channel {ch} Signal')
+            plt.xlabel('Time [s]')
+            plt.ylabel('Amplitude')
+            plt.show()
 
         output_file = output_dir / f'channel_{ch}.wav'
         wavfile.write(output_file, fs, rec[ch][offset:])
@@ -78,26 +108,42 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
         else:
             length = ir.signal_vector()[1].shape[0]
 
+        if start_offset >= length:
+            raise ValueError('Start offset can\'t be greater than the length of the IR!')
+        if length >= ir.signal_vector()[1].shape[0]:
+            raise ValueError('Specified ir_length is greater than the actual length of the IR!')
+
         ir_vector = ir.signal_vector()[1][:length]
 
         if shape_ir:
             window = create_window(start_offset, length, fade_out)
             window_t = np.linspace(0, length, length) * 1 / fs
-            plt.figure()
-            plt.plot(window_t, window)
-            plt.xlabel('Time [s]')
-            plt.ylabel('Amplitude')
-            plt.title(f'Window Channel {ch}')
-            plt.show()
+            if show_plots:
+                plt.figure()
+                plt.plot(window_t, window)
+                plt.xlabel('Time [s]')
+                plt.ylabel('Amplitude')
+                plt.title(f'Window Channel {ch}')
+                plt.show()
             ir_vector *= window
 
         wavfile.write(output_dir / f'ir_channel_{ch}.wav', fs, ir_vector)
 
         plot_spectrum(ir.signal_vector()[1], fs, outfile=output_dir / f'spectrum_{ch}.png',
-                      title=f'Spectrum channel {ch}', show_plots=True)
+                      title=f'Spectrum channel {ch}', show_plots=show_plots)
 
 
-def test(fs: int, f_start, f_end, f: Path, out_dir: Path, show_plots=False):
+def test(fs: int, f_start: int, f_stop: int, f: Path, out_dir: Path, show_plots=False):
+
+    _check_freq(fs, f_start, f_stop)
+
+    if not f.exists():
+        raise ValueError(f'Input file {f} does not exist!')
+    elif not f.is_file():
+        raise ValueError(f'Input file {f} is not a file!')
+    elif f.suffix not in ['.wav', 'wave']:
+        raise ValueError('Input wave file have suffix .wav or .wave')
+
     wav = wavfile.read(str(f))
     if wav[0] != fs:
         raise ValueError('File has incorrect sampling frequency. File and specified fs must match!')
@@ -107,7 +153,7 @@ def test(fs: int, f_start, f_end, f: Path, out_dir: Path, show_plots=False):
     f, spec_orig = plot_spectrum(ir, fs, out_dir / 'ir_spectrum.png', title='Impulse Response Spectrum Original',
                                  show_plots=show_plots)
 
-    sig = create_chirp(fs, f_start, f_end, out_dir / 'chirp.wav')
+    sig = create_chirp(fs, f_start, f_stop, out_dir / 'chirp.wav')
 
     plt.figure()
     plt.plot(sig.time_vector(), sig.signal_vector()[1])
@@ -121,7 +167,7 @@ def test(fs: int, f_start, f_end, f: Path, out_dir: Path, show_plots=False):
     out_sig = apply_ir(ir, sig.signal_vector()[1])
     write_wav(out_dir / 'response.wav', out_sig, fs)
 
-    check_ir = calc_ir(out_dir / 'chirp.wav', out_dir / 'response.wav', f_start, f_end)
+    check_ir = calc_ir(out_dir / 'chirp.wav', out_dir / 'response.wav', f_start, f_stop)
     check_ir.save(out_dir / 'ir_calc.wav')
     f_calc, spec_calc = plot_spectrum(check_ir.signal_vector()[1][0:ir.shape[0]], fs, out_dir / 'ir_spectrum_calc.png',
                                       title='Impulse Response Spectrum Calculated', show_plots=show_plots)
@@ -167,6 +213,9 @@ if __name__ == '__main__':
                             required=False)
     arg_parser.add_argument('--f_stop', type=int, help='The ending frequency of the log-sine in Hz', default=20000,
                             required=False)
+    arg_parser.add_argument('--output_dir', type=Path, help='The directory to store the output files', required=False,
+                            default=Path(__file__).parent / 'results')
+    arg_parser.add_argument('--show_plots', action='store_true', default=False, required=False, help='Display plots')
 
     subparsers = arg_parser.add_subparsers(dest='mode', help='Mode selection', required=True)
 
@@ -174,7 +223,6 @@ if __name__ == '__main__':
     test_mode_parser.add_argument('--file', type=Path,
                                   help='An impulse response wave-file. File fs must match parameter fs',
                                   default=Path(__file__).parent / Path('testdata/ir.wav'), required=False)
-    test_mode_parser.add_argument('--show_plots', action='store_true', default=False, required=False)
 
     rec_mode_parser = subparsers.add_parser('record', help='Record mode')
     rec_mode_parser.add_argument('device_id', type=int, help='The device id of the recording device')
@@ -197,19 +245,7 @@ if __name__ == '__main__':
 
     args = arg_parser.parse_args()
 
-    if args.f_start < 1:
-        raise ValueError('f_start must be greater than 0')
-    if args.f_stop > args.fs // 2:
-        raise ValueError('f_stop must be less than fs/2')
-    if args.f_start > args.f_stop:
-        raise ValueError('f_start must be less than f_stop')
-
-    if args.start_offset < 0:
-        raise ValueError('start_offset must be greater than 0')
-
-    out_dir = Path(__file__).parent / 'results'
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
+    out_dir = args.output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.mode == 'test':
@@ -217,6 +253,6 @@ if __name__ == '__main__':
     elif args.mode == 'record':
         record(args.device_id, args.output_channel, args.reference_output_channel, args.reference_input_channel,
                args.record_channels, args.fs, args.f_start, args.f_stop, out_dir, args.trim_ir, args.shape_ir,
-               args.start_offset, args.ir_length, args.fade_out)
+               args.start_offset, args.ir_length, args.fade_out, args.show_plots)
     else:
         raise ValueError('Invalid mode')
