@@ -44,6 +44,8 @@ The "record" mode is used to create impulse response measurements. The figure be
 > [!CAUTION]
 > The amplifier used in this setup should provide a linear frequency response. Thus, preferably a solid state PA/HIFI amp is used.
 > If for example a guitar tube-amplifier power section is used, the frequency response of the power section will be part of the IR.
+> 
+> However, it might be desired to include the power section of your amplifier, if you are using the preamp-out/effects-send to record guitars.
 
 ![](doc/recording_setup.png)
 
