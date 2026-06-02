@@ -2,6 +2,19 @@
 
 Python command line tool to record speaker impulse responses from multiple channels.
 
+## Prerequisites
+
+The tool needs a Python environment with the correct libraries installed. 
+Tests were executed with a conda environment using Python3.13 and these [requirements](conda_requirements.yaml).
+
+To create a suiting Python environment install conda (e.g. [miniforge](https://github.com/conda-forge/miniforge)) first.
+Afterwards, create the environment and activate it:
+
+```shell
+conda env create -n ir-tools -f conda_requirements.yaml
+conda activate ir-tools
+```
+
 ## CLI
 
 General arguments: 
