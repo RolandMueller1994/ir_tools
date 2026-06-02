@@ -71,7 +71,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
 
         output_file = output_dir / f'channel_{ch}.wav'
         wavfile.write(output_file, fs, rec[ch][offset:])
-        ir = calc_ir(output_dir / 'stimuli.wav', output_file)
+        ir = calc_ir(output_dir / 'stimuli.wav', output_file, f_start, f_end)
         ir.save(output_dir / f'ir_channel_{ch}.wav')
 
         plot_spectrum(ir.signal_vector()[1], fs, outfile=output_dir / f'spectrum_{ch}.png',
@@ -101,7 +101,7 @@ def test(fs: int, f_start, f_end, f: Path, out_dir: Path, show_plots=False):
     out_sig = apply_ir(ir, sig.signal_vector()[1])
     write_wav(out_dir / 'response.wav', out_sig, fs)
 
-    check_ir = calc_ir(out_dir / 'chirp.wav', out_dir / 'response.wav')
+    check_ir = calc_ir(out_dir / 'chirp.wav', out_dir / 'response.wav', f_start, f_end)
     check_ir.save(out_dir / 'ir_calc.wav')
     f_calc, spec_calc = plot_spectrum(check_ir.signal_vector()[1][0:ir.shape[0]], fs, out_dir / 'ir_spectrum_calc.png',
                                       title='Impulse Response Spectrum Calculated', show_plots=show_plots)
@@ -124,6 +124,7 @@ def test(fs: int, f_start, f_end, f: Path, out_dir: Path, show_plots=False):
     plt.xscale('log')
     plt.ylabel('Amplitude Difference [dB]')
     plt.xlabel('Frequency [Hz]')
+    plt.ylim(-10, 10)
     plt.tight_layout()
     plt.savefig(out_dir / 'spectrum_difference.png', dpi=300)
     if show_plots:
@@ -141,9 +142,9 @@ def checkRecChannels(val: str, parser):
 
 if __name__ == '__main__':
     arg_parser = ArgumentParser()
-    arg_parser.add_argument('fs', type=int, help='The sampling frequency in Hz')
-    arg_parser.add_argument('f_start', type=int, help='The starting frequency of the log-sine in Hz')
-    arg_parser.add_argument('f_stop', type=int, help='The ending frequency of the log-sine in Hz')
+    arg_parser.add_argument('--fs', type=int, help='The sampling frequency in Hz', default=48000, required=False)
+    arg_parser.add_argument('--f_start', type=int, help='The starting frequency of the log-sine in Hz', default=20, required=False)
+    arg_parser.add_argument('--f_stop', type=int, help='The ending frequency of the log-sine in Hz', default=20000, required=False)
 
     subparsers = arg_parser.add_subparsers(dest='mode', help='Mode selection', required=True)
 
@@ -161,6 +162,13 @@ if __name__ == '__main__':
     rec_mode_parser.add_argument('record_channels', type=lambda val: checkRecChannels(val, arg_parser), help='A list of input channels that should be recorded')
 
     args = arg_parser.parse_args()
+
+    if args.f_start < 1:
+        raise ValueError('f_start must be greater than 0')
+    if args.f_stop > args.fs // 2:
+        raise ValueError('f_stop must be less than fs/2')
+    if args.f_start > args.f_stop:
+        raise ValueError('f_start must be less than f_stop')
 
     out_dir = Path(__file__).parent / 'results'
     if out_dir.exists():

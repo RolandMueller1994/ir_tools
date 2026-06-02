@@ -9,10 +9,12 @@ def apply_ir(ir: np.ndarray, signal: np.ndarray):
     return np.convolve(signal, ir, mode='full')
 
 
-def calc_ir(stimuli_path: Path, recorded_path: Path):
+def calc_ir(stimuli_path: Path, recorded_path: Path, f_start, f_stop):
     params = {
         'rec_path': str(recorded_path),
-        'ref_path': str(stimuli_path)
+        'ref_path': str(stimuli_path),
+        'frqstt': f_start,
+        'frqstp': f_stop,
     }
     irs = rir.ImpulseResponseSignal(params, sgllvl=0)
     return irs
