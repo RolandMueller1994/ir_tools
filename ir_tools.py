@@ -18,7 +18,7 @@ import sounddevice as sd
 
 def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: List[int], fs: int, f_start: int,
            f_end: int, output_dir: Path, trim_ir: bool = False, shape_ir: bool = False,
-               start_offset: int = 32, ir_length: int = 2**13, fade_out: float = 0.1):
+           start_offset: int = 32, ir_length: int = 2 ** 13, fade_out: float = 0.1):
     dev = sd.query_devices()[device_id]
     sd.default.device = dev['name']
 
@@ -39,10 +39,10 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
     sig = create_chirp(fs, f_start, f_end, outfile=output_dir / 'stimuli.wav')
 
     stim = create_output_data(sig, channels, out_ch, ref_out_ch)
-    rec = sd.playrec(stim, fs, channels, blocking=True).T[...,2**20:]
+    rec = sd.playrec(stim, fs, channels, blocking=True).T[..., 2 ** 20:]
 
     ref_in_data = rec[ref_in]
-    ref_out_data = stim.T[ref_out_ch][2**20:]
+    ref_out_data = stim.T[ref_out_ch][2 ** 20:]
     corr = scipy.signal.correlate(ref_in_data, ref_out_data, mode='same')
 
     corr_max = abs(corr.max())
@@ -58,7 +58,6 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
 
     output_file = output_dir / f'reference.wav'
     wavfile.write(output_file, fs, ref_in_data)
-
 
     for ch in rec_ch:
         plt.figure()
@@ -83,7 +82,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
 
         if shape_ir:
             window = create_window(start_offset, length, fade_out)
-            window_t = np.linspace(0, length, length) * 1/fs
+            window_t = np.linspace(0, length, length) * 1 / fs
             plt.figure()
             plt.plot(window_t, window)
             plt.xlabel('Time [s]')
@@ -96,6 +95,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
 
         plot_spectrum(ir.signal_vector()[1], fs, outfile=output_dir / f'spectrum_{ch}.png',
                       title=f'Spectrum channel {ch}', show_plots=True)
+
 
 def test(fs: int, f_start, f_end, f: Path, out_dir: Path, show_plots=False):
     wav = wavfile.read(str(f))
@@ -163,8 +163,10 @@ def check_rec_channels(val: str, parser):
 if __name__ == '__main__':
     arg_parser = ArgumentParser()
     arg_parser.add_argument('--fs', type=int, help='The sampling frequency in Hz', default=48000, required=False)
-    arg_parser.add_argument('--f_start', type=int, help='The starting frequency of the log-sine in Hz', default=20, required=False)
-    arg_parser.add_argument('--f_stop', type=int, help='The ending frequency of the log-sine in Hz', default=20000, required=False)
+    arg_parser.add_argument('--f_start', type=int, help='The starting frequency of the log-sine in Hz', default=20,
+                            required=False)
+    arg_parser.add_argument('--f_stop', type=int, help='The ending frequency of the log-sine in Hz', default=20000,
+                            required=False)
 
     subparsers = arg_parser.add_subparsers(dest='mode', help='Mode selection', required=True)
 
@@ -177,15 +179,21 @@ if __name__ == '__main__':
     rec_mode_parser = subparsers.add_parser('record', help='Record mode')
     rec_mode_parser.add_argument('device_id', type=int, help='The device id of the recording device')
     rec_mode_parser.add_argument('output_channel', type=int, help='The output channel of the recording device')
-    rec_mode_parser.add_argument('reference_output_channel', type=int, help='The reference output channel of the recording device')
-    rec_mode_parser.add_argument('reference_input_channel', type=int, help='The reference input channel of the recording device')
-    rec_mode_parser.add_argument('record_channels', type=lambda val: check_rec_channels(val, arg_parser), help='A list of input channels that should be recorded')
+    rec_mode_parser.add_argument('reference_output_channel', type=int,
+                                 help='The reference output channel of the recording device')
+    rec_mode_parser.add_argument('reference_input_channel', type=int,
+                                 help='The reference input channel of the recording device')
+    rec_mode_parser.add_argument('record_channels', type=lambda val: check_rec_channels(val, arg_parser),
+                                 help='A list of input channels that should be recorded. Format: "[3, 4]"')
     rec_mode_parser.add_argument('--trim_ir', action='store_true', default=False, help='Trim the IR signal to length')
-    rec_mode_parser.add_argument('--shape_ir', action='store_true', default=False, help='Shape the IR signal by fade-in and fade-out')
-    rec_mode_parser.add_argument('--fade_out', type=float, help='Relative length of fade-out', default=0.1, required=False)
-    rec_mode_parser.add_argument('--start_offset', type=int, help='The number of samples before the start of the IR', default=32, required=False)
-    rec_mode_parser.add_argument('--ir_length', type=int, help='The length of the IR in samples', default=8192, required=False)
-
+    rec_mode_parser.add_argument('--shape_ir', action='store_true', default=False,
+                                 help='Shape the IR signal by fade-in and fade-out')
+    rec_mode_parser.add_argument('--fade_out', type=float, help='Relative length of fade-out', default=0.1,
+                                 required=False)
+    rec_mode_parser.add_argument('--start_offset', type=int, help='The number of samples before the start of the IR',
+                                 default=32, required=False)
+    rec_mode_parser.add_argument('--ir_length', type=int, help='The length of the IR in samples', default=8192,
+                                 required=False)
 
     args = arg_parser.parse_args()
 
