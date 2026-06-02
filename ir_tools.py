@@ -11,13 +11,14 @@ import shutil
 import re
 
 from signals.stimuli import create_chirp, write_wav, create_output_data
-from signals.ir import plot_spectrum, apply_ir, calc_ir
+from signals.ir import plot_spectrum, apply_ir, calc_ir, create_window
 
 import sounddevice as sd
 
 
 def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: List[int], fs: int, f_start: int,
-           f_end: int, output_dir: Path):
+           f_end: int, output_dir: Path, trim_ir: bool = False, shape_ir: bool = False,
+               start_offset: int = 32, ir_length: int = 2**13, fade_out: float = 0.1):
     dev = sd.query_devices()[device_id]
     sd.default.device = dev['name']
 
@@ -52,7 +53,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
         offset = np.argmax(corr)
     else:
         offset = np.argmin(corr)
-    offset -= ref_in_data.shape[0] // 2 + 32
+    offset -= ref_in_data.shape[0] // 2 + start_offset
     print(f'Offset {offset}')
 
     output_file = output_dir / f'reference.wav'
@@ -72,7 +73,26 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
         output_file = output_dir / f'channel_{ch}.wav'
         wavfile.write(output_file, fs, rec[ch][offset:])
         ir = calc_ir(output_dir / 'stimuli.wav', output_file, f_start, f_end)
-        ir.save(output_dir / f'ir_channel_{ch}.wav')
+
+        if trim_ir:
+            length = ir_length
+        else:
+            length = ir.signal_vector()[1].shape[0]
+
+        ir_vector = ir.signal_vector()[1][:length]
+
+        if shape_ir:
+            window = create_window(start_offset, length, fade_out)
+            window_t = np.linspace(0, length, length) * 1/fs
+            plt.figure()
+            plt.plot(window_t, window)
+            plt.xlabel('Time [s]')
+            plt.ylabel('Amplitude')
+            plt.title(f'Window Channel {ch}')
+            plt.show()
+            ir_vector *= window
+
+        wavfile.write(output_dir / f'ir_channel_{ch}.wav', fs, ir_vector)
 
         plot_spectrum(ir.signal_vector()[1], fs, outfile=output_dir / f'spectrum_{ch}.png',
                       title=f'Spectrum channel {ch}', show_plots=True)
@@ -131,7 +151,7 @@ def test(fs: int, f_start, f_end, f: Path, out_dir: Path, show_plots=False):
         plt.show()
 
 
-def checkRecChannels(val: str, parser):
+def check_rec_channels(val: str, parser):
     pattern = re.compile(r'\[((?:\s*\d+\s*,?)+\s*)]')
     match = re.match(pattern, val)
     if not match:
@@ -159,7 +179,13 @@ if __name__ == '__main__':
     rec_mode_parser.add_argument('output_channel', type=int, help='The output channel of the recording device')
     rec_mode_parser.add_argument('reference_output_channel', type=int, help='The reference output channel of the recording device')
     rec_mode_parser.add_argument('reference_input_channel', type=int, help='The reference input channel of the recording device')
-    rec_mode_parser.add_argument('record_channels', type=lambda val: checkRecChannels(val, arg_parser), help='A list of input channels that should be recorded')
+    rec_mode_parser.add_argument('record_channels', type=lambda val: check_rec_channels(val, arg_parser), help='A list of input channels that should be recorded')
+    rec_mode_parser.add_argument('--trim_ir', action='store_true', default=False, help='Trim the IR signal to length')
+    rec_mode_parser.add_argument('--shape_ir', action='store_true', default=False, help='Shape the IR signal by fade-in and fade-out')
+    rec_mode_parser.add_argument('--fade_out', type=float, help='Relative length of fade-out', default=0.1, required=False)
+    rec_mode_parser.add_argument('--start_offset', type=int, help='The number of samples before the start of the IR', default=32, required=False)
+    rec_mode_parser.add_argument('--ir_length', type=int, help='The length of the IR in samples', default=8192, required=False)
+
 
     args = arg_parser.parse_args()
 
@@ -170,6 +196,9 @@ if __name__ == '__main__':
     if args.f_start > args.f_stop:
         raise ValueError('f_start must be less than f_stop')
 
+    if args.start_offset < 0:
+        raise ValueError('start_offset must be greater than 0')
+
     out_dir = Path(__file__).parent / 'results'
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -179,6 +208,7 @@ if __name__ == '__main__':
         test(args.fs, args.f_start, args.f_stop, args.file, out_dir, args.show_plots)
     elif args.mode == 'record':
         record(args.device_id, args.output_channel, args.reference_output_channel, args.reference_input_channel,
-               args.record_channels, args.fs, args.f_start, args.f_stop, out_dir)
+               args.record_channels, args.fs, args.f_start, args.f_stop, out_dir, args.trim_ir, args.shape_ir,
+               args.start_offset, args.ir_length, args.fade_out)
     else:
         raise ValueError('Invalid mode')

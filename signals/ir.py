@@ -20,6 +20,24 @@ def calc_ir(stimuli_path: Path, recorded_path: Path, f_start, f_stop):
     return irs
 
 
+def sigmoid(width: int, rising=True):
+
+    x = np.linspace(-width // 2, width // 2, width)
+    z = 1 / (1 + np.exp((-1 if rising else 1 ) * x / width * 16))
+
+    return z
+
+def create_window(start_offset, length, fade_out=0.1):
+    window = np.ones(shape=length)
+    fade_in = sigmoid(start_offset, rising=True)
+    fade_out_length = int(length * fade_out)
+    fade_out = sigmoid(fade_out_length, rising=False)
+    window[0:start_offset] = fade_in
+    window[-fade_out_length:] = fade_out
+
+    return window
+
+
 def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title: str=None, show_plots: bool=False):
     spect = abs(np.fft.fft(signal))
     idx = spect.shape[0]//2
