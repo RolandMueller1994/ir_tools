@@ -38,6 +38,8 @@ def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title
     plt.figure()
     plt.plot(f[i_20:i_20k], amp[i_20:i_20k])
     plt.xscale('log')
+    y_max = amp[i_20:i_20k].max()
+    plt.ylim(y_max - 70, y_max + 5)
     plt.xlabel('Frequency [Hz]')
     plt.ylabel('Amplitude [dB]')
     plt.title('Spectrum' if title is None else title)
