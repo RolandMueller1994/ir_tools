@@ -17,6 +17,37 @@ conda env create -n ir-tools -f conda_requirements.yaml
 conda activate ir-tools
 ```
 
+## Modes
+
+The tool provides two modes: a test mode and the actual recording mode.
+
+### Test Mode
+
+> [!NOTE]
+> This mode is solely for testing and debugging!
+
+The test mode is intended to check whether the algorithms are correct. 
+It uses a given [impulse response](testdata/ir.wav), convolves it with a generated sine-sweep and calculated the IR from it.
+Finally, the frequency spectrum of the original and the calculated IR are compared. The comparison is shown in the following figures.
+
+|       Spectrum Comparison        |       Spectrum Difference        |
+|:--------------------------------:|:--------------------------------:|
+| ![](doc/spectrum_comparison.png) | ![](doc/spectrum_difference.png) |
+
+The results show that the original and the calculated data matches well, apart from frequencies very close to the Nyquist frequency.
+This shows that the calculations performed by the tool and the underlying libraries are correct.
+
+### Record Mode
+
+The "record" mode is used to create impulse response measurements. The figure below shows a typical setup using 4-in/4-out soundcard.
+
+![](doc/recording_setup.png)
+
+In this scenario, output 1 and input 1 are used for timing reference. 
+This connection feeds back the original sine-sweep such that the IO-delay of the soundcard can be compensated.
+Output 2 drives the speaker through an amplifier. The output of the amplifier is recorded by two microphones.
+For both microphones, an impulse-response can be created simultaneously which ensures that the IRs are aligned like in the original setup.
+
 ## Audio Devices
 
 Available audio devices can be checked with the sounddevice module:
@@ -91,4 +122,15 @@ options:
                         The number of samples before the start of the IR
   --ir_length IR_LENGTH
                         The length of the IR in samples
+```
+
+## Example Usage
+
+The tool would be executed with following parameter if the setup above is to be used and the MOTU-AVB sound device should be used.
+
+> [!CAUTION]
+> Channel indices start from 0. Thus, "Out 1" would be index 0.
+
+```shell
+python ir_tools.py --fs 48000 --f_start 1 --f_stop 20000 --output_dir <path/to/results> record 3 1 0 0 "[1, 2]"
 ```

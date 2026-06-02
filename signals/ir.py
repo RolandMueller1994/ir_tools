@@ -54,6 +54,7 @@ def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title
             i_20k = i
 
     amp = 20 * np.log(np.abs(spect[0:idx]))
+    amp -= amp.max()
 
     plt.figure()
     plt.plot(f[i_20:i_20k], amp[i_20:i_20k])

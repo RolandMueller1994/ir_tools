@@ -180,6 +180,7 @@ def test(fs: int, f_start: int, f_stop: int, f: Path, out_dir: Path, show_plots=
     plt.legend()
     plt.ylabel('Amplitude [dB]')
     plt.xlabel('Frequency [Hz]')
+    plt.ylim(-70, 5)
     plt.tight_layout()
     plt.savefig(out_dir / 'spectrum_comparison.png', dpi=300)
     if show_plots:
@@ -190,7 +191,7 @@ def test(fs: int, f_start: int, f_stop: int, f: Path, out_dir: Path, show_plots=
     plt.xscale('log')
     plt.ylabel('Amplitude Difference [dB]')
     plt.xlabel('Frequency [Hz]')
-    plt.ylim(-10, 10)
+    plt.ylim(-5, 5)
     plt.tight_layout()
     plt.savefig(out_dir / 'spectrum_difference.png', dpi=300)
     if show_plots:
