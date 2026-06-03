@@ -20,7 +20,9 @@ def create_chirp(fs:int, f_start: int, f_end: int, outfile: Union[Path, None]=No
         'sglszeidx': 5,
         'frqstt': f_start,
         'frqstp': f_end,
-        'sgllvl': level
+        'sgllvl': level,
+        'antslcdur': 0,
+        'pstslcdur': 0,
     }
 
     sig = rir.SweptSineSignal(sweep_params)
@@ -29,8 +31,9 @@ def create_chirp(fs:int, f_start: int, f_end: int, outfile: Union[Path, None]=No
     return sig
 
 
-def create_output_data(sig: rir.SweptSineSignal, channels: int, out_ch, ref_out_ch):
-    sig = sig.signal_vector()[1]
+def create_output_data(sig: Union[rir.SweptSineSignal, np.ndarray], channels: int, out_ch, ref_out_ch):
+    if isinstance(sig, rir.SweptSineSignal):
+        sig = sig.signal_vector()[1]
 
     # amp = max((abs(sig.max()), abs(sig.min())))
     # sig /= amp
