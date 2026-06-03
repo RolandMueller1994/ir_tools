@@ -177,7 +177,7 @@ the IR from the first run is used as calibration input.
 > Damage might be possible if the amplifier is directly connected to the interface!
 
 > [!NOTE]
-> Compensation is limited to 40dB in order to improve the stability of the compensation.
+> Compensation is limited to 40dB in order to improve the stability of the algorithm.
 
 ![](doc/recording_setup_calibration.png)
 
