@@ -7,7 +7,7 @@ import scipy
 from scene_rir import rir
 from scipy.io import wavfile
 import math
-import pyfar
+import pyfar as pf
 
 
 def apply_ir(ir: np.ndarray, signal: np.ndarray):
@@ -62,7 +62,7 @@ def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title
 
     i_20, i_20k = get_f_index(f)
 
-    amp = 20 * np.log(np.abs(spect[0:idx]))
+    amp = 20 * np.log10(np.abs(spect[0:idx]))
     phase = np.angle(spect[0:idx])/math.pi * 180
     amp -= amp.max()
 
@@ -80,6 +80,17 @@ def plot_spectrum(signal: np.ndarray, fs, outfile: Union[Path, None]=None, title
         plt.show()
 
     return f[i_20:i_20k], amp[i_20:i_20k], phase[i_20: i_20k]
+
+
+def invert_response(ir: np.ndarray, fs):
+    sig = pf.Signal(ir, fs)
+    sig = pf.dsp.minimum_phase(sig, truncate=True)
+    target = pf.dsp.filter.butterworth(pf.signals.impulse(sig.n_samples, sampling_rate=fs), 4, [20, 20e3], 'bandpass')
+    regularization = pf.dsp.filter.low_shelf(
+        pf.signals.impulse(sig.n_samples, sampling_rate=fs), 18e3, -40, 2, 'II')
+    inv = pf.dsp.RegularizedSpectrumInversion.from_magnitude_spectrum(sig, regularization, beta=0.1, target=target)
+    inverted: pf.Signal = inv.invert
+    return inverted.time
 
 
 def calibrate_rec(data: np.ndarray, calibration_ir: Path, calibration_ref_ir: Path, fs: int, ref_in_ch: int, show_plots: bool = False):
@@ -146,6 +157,8 @@ def calibrate_rec(data: np.ndarray, calibration_ir: Path, calibration_ref_ir: Pa
     else:
         inv_ir = np.fft.ifft(spectrum_ref)
     # inv_ir = np.fft.ifft(spectrum_ref * np.conjugate(spectrum) / (np.abs(spectrum) ** 2 + 10**(-20/20)))
+    inv_ir = invert_response(ir, fs)[0]
+    # inv_ir = np.concat((inv_ir[-1024:], inv_ir[:-1024]))
     inv_ir = np.real(inv_ir)
 
 
@@ -159,7 +172,8 @@ def calibrate_rec(data: np.ndarray, calibration_ir: Path, calibration_ref_ir: Pa
         plt.figure()
         plt.plot(f, 20*np.log10(np.abs((spectrum/spectrum_ref)[:spectrum_size])), label='Original')
         inv_spectrum = np.fft.fft(inv_ir)
-        plt.plot(f, 20*np.log10(np.abs(inv_spectrum[:spectrum_size])), label='Inverted')
+        f = np.linspace(0, fs / 2, inv_spectrum.shape[0] // 2)
+        plt.plot(f, 20*np.log10(np.abs(inv_spectrum[:inv_spectrum.shape[0] // 2])), label='Inverted')
         plt.xlabel('Frequency [Hz]')
         plt.ylabel('Amplitude [dB]')
         plt.xscale('log')
@@ -169,12 +183,12 @@ def calibrate_rec(data: np.ndarray, calibration_ir: Path, calibration_ref_ir: Pa
         plt.show()
 
         plt.figure()
-        plt.plot(f, np.angle(inv_spectrum[:spectrum_size])/math.pi * 180)
+        plt.plot(f, np.angle(inv_spectrum[:inv_spectrum.shape[0] // 2])/math.pi * 180)
         plt.xscale('log')
         plt.xlim(1, 20e3)
         plt.show()
 
-    inv_ir = np.concat((inv_ir[-128:], inv_ir[:-128]))
+
     inv_ir /= max(abs(inv_ir))
     wavfile.write('/home/roland/Projects/ir_tools/results/ir_correction.wav', fs, inv_ir)
     out_data = None
