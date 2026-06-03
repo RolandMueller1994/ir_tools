@@ -1,5 +1,8 @@
 # ir_tools
 
+> [!CAUTION]
+> When using this tool, be careful with output level/volume. Excessive level might cause hearing loss or damage your equipment.
+
 Python command line tool to record speaker impulse responses from multiple channels.
 
 Bases around exponential-sine-sweep method implemented in [scene-rir](https://sr.ht/~csevast/scene-rir/) library.
@@ -46,6 +49,8 @@ The "record" mode is used to create impulse response measurements. The figure be
 > If for example a guitar tube-amplifier power section is used, the frequency response of the power section will be part of the IR.
 > 
 > However, it might be desired to include the power section of your amplifier, if you are using the preamp-out/effects-send to record guitars.
+> 
+> If you want to calibrate for the transfer function of your amplifier, check section [Frequency Compensation](#frequency-compensation).
 
 ![](doc/recording_setup.png)
 
