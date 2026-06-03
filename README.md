@@ -131,6 +131,8 @@ options:
   --ir_length IR_LENGTH
                         The length of the IR in samples
   --postfix POSTFIX     Postfix to be added to end of the file name
+  --calibrate CALIBRATE
+                        Path to an impulse response used for calibration. This can be obtained from a measurement without a speaker/before a speaker
 ```
 
 ## Example Usage
@@ -156,3 +158,33 @@ Following parameters are used:
 | Timing reference output channel |    0     |
 | Timing reference input channel  |    0     |
 |       Recording channels        | 1 and 2  |
+
+## Frequency Compensation
+
+In case you are using for example a guitar amplifier power section to record impulse responses, it might be necessary to compensate for the non-linear frequency transfer function.
+The tool offers the --calibrate option. This parameter expects an impulse response of the amplifier without cabinet.
+Such an impulse response can be obtained with a setup like shown in the following figure.
+In this case, a load box with speaker-through (no attenuation!) is used. Through the line out of such a device, the output of the 
+amplifier can be recorded directly. Using the tool in this repo, we can then create an IR for the amplifier. This IR is further used in calibration/frequency compenstation.
+Thus, we execute the script twice: once while recording the output of the amplifier and then to record the speaker. In the second run,
+the IR from the first run is used as calibration input.
+
+> [!CAUTION]
+> This is still experimental. Check the output and run with --show_plots to verify result.
+
+> [!CAUTION]
+> Do not directly connect the output of your amplifier to your audio interface. Always use a device that converts the signal to line/instrument level.
+> Damage might be possible if the amplifier is directly connected to the interface!
+
+> [!NOTE]
+> Compensation is limited to 40dB in order to improve the stability of the compensation.
+
+![](doc/recording_setup_calibration.png)
+
+Following figures show the result of an experiment where an EQ was placed in the signal chain. The left figure shows the 
+original spectrum of the recording where the EQ curve is visible. In the left figure, the IR from the first recording was used as compensation.
+As the results show, the frequency response is almost linear, proving a correct algorithm.
+
+|         Original Spectrum         |    Spectrum with Compensation     |
+|:---------------------------------:|:---------------------------------:|
+|  ![](doc/spectrum_original.png)   | ![](doc/spectrum_compensated.png) |

@@ -31,10 +31,10 @@ def _check_freq(fs: int, f_start, f_stop):
 
 
 def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: List[int], fs: int, f_start: int,
-           f_end: int, level: float, output_dir: Path, trim_ir: bool = False, shape_ir: bool = False,
+           f_stop: int, level: float, output_dir: Path, trim_ir: bool = False, shape_ir: bool = False,
            start_offset: int = 32, ir_length: int = 2 ** 13, fade_out: float = 0.1, show_plots: bool = False,
-           postfix: Union[str, None] = None, calibrate: Union[Path, None] = None, calibrate_ref: Union[Path, None] = None):
-    _check_freq(fs, f_start, f_end)
+           postfix: Union[str, None] = None, calibrate: Union[Path, None] = None):
+    _check_freq(fs, f_start, f_stop)
 
     if level > 0:
         raise ValueError('Level should be less than or equal to 0 dB. 0 db would be full-scale output.')
@@ -69,17 +69,14 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
         if fade_out < 0 or fade_out > 1:
             raise ValueError('Fade out value must be between 0 and 1!')
 
-    sig = create_chirp(fs, f_start, f_end, outfile=output_dir / 'stimuli.wav', level=level).signal_vector()[1]
-    # sig = wavfile.read(Path('/home/roland/Projects/ir_tools/testdata/rew_stimuli_2.wav'))[1].astype(float)
-    #sig /= max(sig.max(), abs(sig.min()))
-    #sig *= 10**(level/20)
+    sig = create_chirp(fs, f_start, f_stop, outfile=output_dir / 'stimuli.wav', level=level).signal_vector()[1]
 
     stim = create_output_data(sig, channels, out_ch, ref_out_ch)
     print(f'Recording exponential sine-sweep of {stim.shape[0] * 1 / fs:.2f}s length.')
     rec = sd.playrec(stim, fs, channels, blocking=True).T[..., 2 ** 20:]
 
-    if calibrate is not None or calibrate_ref is not None:
-        rec = calibrate_rec(rec, calibrate, calibrate_ref, fs, ref_in, show_plots)
+    if calibrate is not None:
+        rec = calibrate_rec(rec, calibrate, fs, ref_in, show_plots, output_dir, postfix)
 
     ref_in_data = rec[ref_in] / (max(rec[ref_in].max(), abs(rec[ref_in].min())))
     ref_out_data = stim.T[ref_out_ch][2 ** 20:]
@@ -107,7 +104,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
     elif not postfix.startswith('_'):
         postfix = '_' + postfix
 
-    for ch in [ref_in] + rec_ch:
+    for ch in rec_ch:
         print(f'Analyzing data for channel {ch}')
         plt.figure()
         rec_data = (rec[ch] / max(rec[ch].max(), abs(rec[ch].min())))[offset:]
@@ -121,7 +118,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
 
         output_file = output_dir / f'channel_{ch}{postfix}.wav'
         wavfile.write(output_file, fs, rec_data)
-        ir = calc_ir(output_dir / 'stimuli.wav', output_file, f_start, f_end)
+        ir = calc_ir(output_dir / 'stimuli.wav', output_file, f_start, f_stop)
 
         if trim_ir:
             length = ir_length
@@ -153,7 +150,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
         print(f'Impulse response written to: {ir_file}')
 
         plot_spectrum(ir.signal_vector()[1], fs, outfile=output_dir / f'spectrum_{ch}{postfix}.png',
-                      title=f'Spectrum channel {ch}', show_plots=show_plots)
+                      title=f'Spectrum Channel {ch}', show_plots=show_plots, f_start=f_start, f_stop=f_stop)
 
 
 def test(fs: int, f_start: int, f_stop: int, f: Path, out_dir: Path, show_plots=False):
@@ -173,7 +170,7 @@ def test(fs: int, f_start: int, f_stop: int, f: Path, out_dir: Path, show_plots=
     ir = wav[1]
 
     f, spec_orig, phase_orig = plot_spectrum(ir, fs, out_dir / 'ir_spectrum.png', title='Impulse Response Spectrum Original',
-                                 show_plots=show_plots)
+                                 show_plots=show_plots, f_start=f_start, f_stop=f_stop)
 
     sig = create_chirp(fs, f_start, f_stop, out_dir / 'chirp.wav')
 
@@ -192,7 +189,7 @@ def test(fs: int, f_start: int, f_stop: int, f: Path, out_dir: Path, show_plots=
     check_ir = calc_ir(out_dir / 'chirp.wav', out_dir / 'response.wav', f_start, f_stop)
     check_ir.save(out_dir / 'ir_calc.wav')
     f_calc, spec_calc, phase_calc = plot_spectrum(check_ir.signal_vector()[1][0:ir.shape[0]], fs, out_dir / 'ir_spectrum_calc.png',
-                                      title='Impulse Response Spectrum Calculated', show_plots=show_plots)
+                                      title='Impulse Response Spectrum Calculated', show_plots=show_plots, f_start=f_start, f_stop=f_stop)
 
     spec_diff = spec_calc - spec_orig
     fig, ax1 = plt.subplots()
@@ -277,9 +274,6 @@ if __name__ == '__main__':
     rec_mode_parser.add_argument('--calibrate', type=Path,
                                  help='Path to an impulse response used for calibration. This can be obtained from a measurement without a speaker/before a speaker.',
                                  default=None)
-    rec_mode_parser.add_argument('--calibrate_ref', type=Path,
-                                 help='Path to the impulse response of the reference channel used for calibration.',
-                                 default=None)
 
     args = arg_parser.parse_args()
 
@@ -292,6 +286,6 @@ if __name__ == '__main__':
         record(args.device_id, args.output_channel, args.reference_output_channel, args.reference_input_channel,
                args.record_channels, args.fs, args.f_start, args.f_stop, args.level, out_dir, args.trim_ir,
                args.shape_ir, args.start_offset, args.ir_length, args.fade_out, args.show_plots, args.postfix,
-               args.calibrate, args.calibrate_ref)
+               args.calibrate)
     else:
         raise ValueError('Invalid mode')
