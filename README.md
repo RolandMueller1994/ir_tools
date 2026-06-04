@@ -136,6 +136,8 @@ options:
   --ir_length IR_LENGTH
                         The length of the IR in samples
   --postfix POSTFIX     Postfix to be added to end of the file name
+  --channel_mapping CHANNEL_MAPPING
+                        Channel name mapping json file
   --calibrate CALIBRATE
                         Path to an impulse response used for calibration. This can be obtained from a measurement without a speaker/before a speaker
 ```
@@ -163,6 +165,18 @@ Following parameters are used:
 | Timing reference output channel |    0     |
 | Timing reference input channel  |    0     |
 |       Recording channels        | 1 and 2  |
+
+## Channel Mapping
+
+If you want to replace the default naming of output files by dedicated names, the --channel_naming option can be used.
+A path to a json file, like shown below, should be specified for this parameter. The file only contains key/value pairs containing the channel number and the desired name.
+
+```json
+{
+  "5": "Microphone A",
+  "6": "Microphone B"
+}
+```
 
 ## Frequency Compensation
 

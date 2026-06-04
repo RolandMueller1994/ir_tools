@@ -104,6 +104,23 @@ def invert_response(ir: np.ndarray, fs):
     return inverted.time
 
 
+def ir_unwrap(ir: np.ndarray) -> np.ndarray:
+
+    ir_min = np.abs(ir).max()
+    ir_max = ir.max()
+
+    if ir_min > ir_max:
+        peak_idx = np.argmin(ir)
+    else:
+        peak_idx = np.argmax(ir)
+
+    if peak_idx < 32:
+        unwrapped = np.concat((ir[-(32-peak_idx):], ir[:-(32-peak_idx)]))
+    else:
+        unwrapped = np.concat((ir[peak_idx-32:], ir[:peak_idx-32]))
+    return unwrapped
+
+
 def calibrate_rec(data: np.ndarray, calibration_ir: Path, fs: int, ref_in_ch: int, show_plots: bool = False,
                   output_dir: Union[Path, None] = None, suffix: Union[None, str] = None):
     ir = wavfile.read(str(calibration_ir))
@@ -118,6 +135,8 @@ def calibrate_rec(data: np.ndarray, calibration_ir: Path, fs: int, ref_in_ch: in
 
     inv_ir = invert_response(ir, fs)[0]
     inv_ir = np.real(inv_ir)
+    # inv_ir = np.concat((inv_ir[-64:], inv_ir[:-64]))
+    inv_ir = ir_unwrap(inv_ir)
 
     if show_plots:
         plt.figure()

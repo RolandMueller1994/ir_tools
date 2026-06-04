@@ -33,7 +33,8 @@ def _check_freq(fs: int, f_start, f_stop):
 def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: List[int], fs: int, f_start: int,
            f_stop: int, level: float, output_dir: Path, trim_ir: bool = False, shape_ir: bool = False,
            start_offset: int = 32, ir_length: int = 2 ** 13, fade_out: float = 0.1, show_plots: bool = False,
-           postfix: Union[str, None] = None, calibrate: Union[Path, None] = None):
+           postfix: Union[str, None] = None, calibrate: Union[Path, None] = None,
+           channel_mapping: Union[dict, None] = None, ):
     _check_freq(fs, f_start, f_stop)
 
     if level > 0:
@@ -109,14 +110,24 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
         plt.figure()
         rec_data = (rec[ch] / max(rec[ch].max(), abs(rec[ch].min())))[offset:]
         t = np.linspace(0, rec_data.shape[0] * 1 / fs, rec_data.shape[0])
+
+        if channel_mapping is not None and ch in channel_mapping:
+            title = f'{str(channel_mapping[ch])}'
+        else:
+            title = f'Channel {ch}'
+
+
         if show_plots:
             plt.plot(t, rec_data)
-            plt.title(f'Channel {ch} Signal')
+            plt.title(f'{title} Signal')
             plt.xlabel('Time [s]')
             plt.ylabel('Amplitude')
             plt.show()
 
-        output_file = output_dir / f'channel_{ch}{postfix}.wav'
+        if channel_mapping is not None and ch in channel_mapping:
+            output_file = output_dir / f'{str(channel_mapping[ch])}.wav'
+        else:
+            output_file = output_dir / f'channel_{ch}{postfix}.wav'
         wavfile.write(output_file, fs, rec_data)
         ir = calc_ir(output_dir / 'stimuli.wav', output_file, f_start, f_stop)
 
@@ -127,7 +138,7 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
 
         if start_offset >= length:
             raise ValueError('Start offset can\'t be greater than the length of the IR!')
-        if length >= ir.signal_vector()[1].shape[0]:
+        if length > ir.signal_vector()[1].shape[0]:
             raise ValueError('Specified ir_length is greater than the actual length of the IR!')
 
         ir_vector = ir.signal_vector()[1][:length]
@@ -144,13 +155,18 @@ def record(device_id: int, out_ch: int, ref_out_ch: int, ref_in: int, rec_ch: Li
                 plt.show()
             ir_vector *= window
 
-        ir_file = output_dir / f'ir_channel_{ch}{postfix}.wav'
-        wavfile.write(ir_file, fs, ir_vector)
+        if channel_mapping is not None and ch in channel_mapping:
+            ir_file = output_dir / f'{str(channel_mapping[ch])}.wav'
+            spectrum_file = output_dir / f'spectrum_{str(channel_mapping[ch])}.png'
+        else:
+            ir_file = output_dir / f'ir_channel_{ch}{postfix}.wav'
+            spectrum_file = output_dir / f'spectrum_{ch}{postfix}.png'
+        wavfile.write(ir_file, fs, ir_vector.astype(np.float32))
         print(f'Recording written to: {output_file}')
         print(f'Impulse response written to: {ir_file}')
 
-        plot_spectrum(ir.signal_vector()[1], fs, outfile=output_dir / f'spectrum_{ch}{postfix}.png',
-                      title=f'Spectrum Channel {ch}', show_plots=show_plots, f_start=f_start, f_stop=f_stop)
+        plot_spectrum(ir_vector, fs, outfile=spectrum_file,
+                      title=f'Spectrum {title}', show_plots=show_plots, f_start=f_start, f_stop=f_stop)
 
 
 def test(fs: int, f_start: int, f_stop: int, f: Path, out_dir: Path, show_plots=False):
@@ -231,6 +247,17 @@ def check_rec_channels(val: str, parser):
     return [int(i) for i in lst]
 
 
+def load_channel_mapping(val: str, parser):
+    try:
+        with open(val) as f:
+            ch_mapping = json.load(f)
+            ch_mapping = {int(key): val for key, val in ch_mapping.items()}
+            return ch_mapping
+    except Exception as e:
+        parser.error('Couldn\'t load channel mapping')
+        return None
+
+
 if __name__ == '__main__':
     arg_parser = ArgumentParser()
     arg_parser.add_argument('--fs', type=int, help='The sampling frequency in Hz', default=48000, required=False)
@@ -271,6 +298,8 @@ if __name__ == '__main__':
                                  required=False)
     rec_mode_parser.add_argument('--postfix', type=str, help='Postfix to be added to end of the file name',
                                  default=None, required=False)
+    rec_mode_parser.add_argument('--channel_mapping', type=lambda val: load_channel_mapping(val, arg_parser),
+                                 help='Channel name mapping json file', required=False, default=None)
     rec_mode_parser.add_argument('--calibrate', type=Path,
                                  help='Path to an impulse response used for calibration. This can be obtained from a measurement without a speaker/before a speaker.',
                                  default=None)
@@ -286,6 +315,6 @@ if __name__ == '__main__':
         record(args.device_id, args.output_channel, args.reference_output_channel, args.reference_input_channel,
                args.record_channels, args.fs, args.f_start, args.f_stop, args.level, out_dir, args.trim_ir,
                args.shape_ir, args.start_offset, args.ir_length, args.fade_out, args.show_plots, args.postfix,
-               args.calibrate)
+               args.calibrate, args.channel_mapping)
     else:
         raise ValueError('Invalid mode')
